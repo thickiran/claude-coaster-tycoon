@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-02T17:59:17.496Z",
+  "updatedAt": "2026-10-02T21:35:29.828Z",
   "players": 1,
   "entries": [
     {
@@ -7,15 +7,15 @@
       "user": "thickiran",
       "id": "33991ae84490",
       "name": "claude-coaster-tycoon Park",
-      "rating": 652,
-      "guests": 87,
-      "guestsTotal": 596,
-      "ridesOpen": 2,
-      "coasters": 2,
-      "riders": 891,
-      "best": "Stack Overflow (Hyper Coaster, E 6.14)",
-      "updatedAt": "2026-10-02T17:58:05.756Z",
-      "score": 1026
+      "rating": 865,
+      "guests": 148,
+      "guestsTotal": 3852,
+      "ridesOpen": 3,
+      "coasters": 3,
+      "riders": 3495,
+      "best": "The Monolith (Looping Coaster, E 7.49)",
+      "updatedAt": "2026-10-02T18:29:10.117Z",
+      "score": 1776
     }
   ]
 }
