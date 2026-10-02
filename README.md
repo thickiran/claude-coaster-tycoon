@@ -4,6 +4,10 @@
 
 A Claude Code mod in the spirit of the original RollerCoaster Tycoon.
 
+[![Claude Coaster Tycoon in 15 seconds](docs/promo.gif)](docs/promo.mp4)
+
+<sub>15 seconds, made from the mod's own renderer. [Watch with sound (MP4)](docs/promo.mp4).</sub>
+
 **Quick start:** paste this into Claude Code and let it do the rest:
 
 ```
@@ -13,6 +17,8 @@ Install the Claude Coaster Tycoon mod from github.com/thickiran/claude-coaster-t
 Or install it yourself in two commands ([below](#install)).
 
 ![A park built by Opus, Sonnet and Haiku crews](docs/park.png)
+
+<sub>A park built by Opus, Sonnet and Haiku crews working side by side.</sub>
 
 ## How it plays
 
