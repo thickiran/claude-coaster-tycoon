@@ -58,13 +58,15 @@ export function sanitizePark(id, raw, user) {
   return { ...p, score: score(p) }
 }
 
-async function gh(path, init = {}) {
+// The Action's token may not read gists (the API answers 403), and public
+// gists need no token: gist reads go out anonymously, `isAnonymous`.
+async function gh(path, init = {}, isAnonymous = false) {
   const res = await fetch(`${API}${path}`, {
     ...init,
     headers: {
       accept: 'application/vnd.github+json',
       'x-github-api-version': '2022-11-28',
-      ...(TOKEN ? { authorization: `Bearer ${TOKEN}` } : {}),
+      ...(TOKEN && !isAnonymous ? { authorization: `Bearer ${TOKEN}` } : {}),
       ...(init.body ? { 'content-type': 'application/json' } : {}),
     },
   })
@@ -72,18 +74,23 @@ async function gh(path, init = {}) {
   return res.status === 204 ? null : res.json()
 }
 
-async function readGistParks(gistId) {
-  const gist = await gh(`/gists/${gistId}`)
-  const file = gist.files?.[GIST_FILE]
-  if (!file) return { owner: gist.owner?.login, parks: {} }
-  let content = file.content
-  if (file.truncated && file.raw_url?.startsWith('https://gist.githubusercontent.com/')) {
-    content = await (await fetch(file.raw_url)).text()
-  }
+// Who owns a gist: asked once, when a player registers (the anonymous API
+// allows 60 calls an hour, plenty for joins).
+async function gistOwner(gistId) {
+  const gist = await gh(`/gists/${gistId}`, {}, true)
+  return gist.owner?.login
+}
+
+// A registered gist's parks, from its raw file: no API call, so no rate
+// limit however many players there are. The owner was checked at joining
+// and a gist cannot change hands.
+async function readGistParks(user, gistId) {
+  const res = await fetch(`https://gist.githubusercontent.com/${user}/${gistId}/raw/${GIST_FILE}?t=${Date.now()}`)
+  if (!res.ok) throw new Error(`gist ${gistId}: HTTP ${res.status}`)
   try {
-    return { owner: gist.owner?.login, parks: JSON.parse(content).parks ?? {} }
+    return JSON.parse(await res.text()).parks ?? {}
   } catch {
-    return { owner: gist.owner?.login, parks: {} }
+    return {}
   }
 }
 
@@ -91,6 +98,10 @@ async function registerFromIssue(registry) {
   const event = JSON.parse(await readFile(process.env.GITHUB_EVENT_PATH, 'utf8'))
   const issue = event.issue
   if (!issue || !String(issue.title).startsWith('[park] join')) return
+  await registerIssue(registry, issue)
+}
+
+async function registerIssue(registry, issue) {
   const user = issue.user?.login
   const gistId = /"gist"\s*:\s*"([0-9a-f]{20,40})"/.exec(issue.body ?? '')?.[1]
   const reply = async (text) => {
@@ -101,7 +112,7 @@ async function registerFromIssue(registry) {
     await reply('Could not find a park gist in this issue. Run `/park join` from the mod to register.')
     return
   }
-  const { owner } = await readGistParks(gistId)
+  const owner = await gistOwner(gistId)
   if (owner !== user) {
     await reply(`That gist belongs to ${owner ?? 'nobody'}, not @${user}, so it was not registered.`)
     return
@@ -111,12 +122,24 @@ async function registerFromIssue(registry) {
   await reply(`🎢 Welcome to the leaderboard, @${user}! Your park shows up at the next board update (within about 20 minutes).`)
 }
 
+// Join issues still open (a run that failed, an outage) are picked up by the
+// next scheduled run.
+async function registerOpenIssues(registry) {
+  const open = await gh(`/repos/${REPO}/issues?state=open&per_page=50`)
+  for (const issue of open.filter(i => !i.pull_request && String(i.title).startsWith('[park] join'))) {
+    try {
+      await registerIssue(registry, issue)
+    } catch (err) {
+      console.warn(`issue #${issue.number}: ${err.message}`)
+    }
+  }
+}
+
 async function rebuild(registry) {
   const entries = []
   for (const [user, { gist }] of Object.entries(registry)) {
     try {
-      const { owner, parks } = await readGistParks(gist)
-      if (owner !== user) continue
+      const parks = await readGistParks(user, gist)
       const fresh = Object.entries(parks)
         .map(([id, raw]) => sanitizePark(id, raw, user))
         .filter(p => p && Date.now() - Date.parse(p.updatedAt) < STALE_DAYS * 86_400_000)
@@ -142,6 +165,7 @@ async function rebuild(registry) {
 async function main() {
   const registry = JSON.parse(await readFile(REGISTRY, 'utf8'))
   if (process.env.GITHUB_EVENT_NAME === 'issues') await registerFromIssue(registry)
+  else await registerOpenIssues(registry)
   await rebuild(registry)
 }
 
