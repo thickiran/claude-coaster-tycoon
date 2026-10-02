@@ -6,6 +6,7 @@
   "homepage": "https://github.com/thickiran/claude-coaster-tycoon",
   "repository": "https://github.com/thickiran/claude-coaster-tycoon",
   "license": "MIT",
+  "privacyPolicyUrl": "https://github.com/thickiran/claude-coaster-tycoon/blob/main/plugins/coaster-tycoon/README.md#what-it-sends-and-where",
   "keywords": ["game", "rollercoaster", "tycoon", "fun", "leaderboard"],
   "types": "./types/index.d.ts"
 }
