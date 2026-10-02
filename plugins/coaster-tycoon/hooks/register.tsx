@@ -2,7 +2,7 @@ import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register } from 'claude-code'
 
 import type { Leaderboard, ParkBoard, ParkView } from '../types'
-import { BOARD_URL, GIST_FILE, REPO, ago, cleanName, pad, parkId, parkStats } from './board'
+import { GIST_FILE, ago, cleanName, pad, parkId, parkStats } from './board'
 import type { ParkStats } from './board'
 import { renderFrame, toRasterCells, toSvg } from './draw'
 import { renderSvg } from './vector'
@@ -119,9 +119,10 @@ async function frame($: EngineInterface) {
 // `gh` login); the repository's Action reads every registered gist and
 // publishes the ranking, which the pane fetches.
 
-async function gh($: EngineInterface, args: string[], stdin?: string) {
-  return $.process.run(['gh', ...args], { stdin, timeoutMs: 20_000 })
-}
+// Every program the mod runs is written out in full at its call: `git` once
+// to find the project, and `gh` (the player's GitHub CLI) for the
+// leaderboard, only after `/park join`. See the plugin's README.
+const GH = { timeoutMs: 20_000 }
 
 async function account($: EngineInterface): Promise<Account | undefined> {
   const saved = (await $.store.get('account')) as Account | undefined
@@ -130,7 +131,7 @@ async function account($: EngineInterface): Promise<Account | undefined> {
 }
 
 async function readGist($: EngineInterface, gist: string): Promise<Record<string, ParkStats>> {
-  const got = await gh($, ['api', `gists/${gist}`, '--jq', `.files["${GIST_FILE}"].content`])
+  const got = await $.process.run(['gh', 'api', `gists/${gist}`, '--jq', '.files["park.json"].content'], GH)
   if (got.exitCode !== 0) throw new Error(got.stderr.trim() || 'could not read the park gist')
   try {
     const parsed = JSON.parse(got.stdout || '{}') as { parks?: Record<string, ParkStats> }
@@ -142,7 +143,8 @@ async function readGist($: EngineInterface, gist: string): Promise<Record<string
 
 async function writeGist($: EngineInterface, gist: string, parks: Record<string, ParkStats>) {
   const content = JSON.stringify({ v: 1, parks }, null, 2)
-  const sent = await gh($, ['api', '-X', 'PATCH', `gists/${gist}`, '--input', '-'], JSON.stringify({ files: { [GIST_FILE]: { content } } }))
+  const body = JSON.stringify({ files: { [GIST_FILE]: { content } } })
+  const sent = await $.process.run(['gh', 'api', '-X', 'PATCH', `gists/${gist}`, '--input', '-'], { ...GH, stdin: body })
   if (sent.exitCode !== 0) throw new Error(sent.stderr.trim() || 'could not update the park gist')
 }
 
@@ -161,7 +163,7 @@ async function pushPark($: EngineInterface) {
 
 async function fetchBoard($: EngineInterface) {
   try {
-    const got = await $.http.fetch(`${BOARD_URL}?t=${Math.floor(Date.now() / 60_000)}`)
+    const got = await $.http.fetch('https://raw.githubusercontent.com/thickiran/claude-coaster-tycoon/main/leaderboard/leaderboard.json')
     if (!got.ok) throw new Error(`HTTP ${got.status}`)
     const parsed = JSON.parse(got.text) as Leaderboard
     const acct = await account($)
@@ -176,7 +178,7 @@ async function fetchBoard($: EngineInterface) {
 async function join($: EngineInterface, name: string): Promise<string> {
   const w = await park($)
   if (name) w.shareName = cleanName(name)
-  const me = await gh($, ['api', 'user', '--jq', '.login']).catch(() => undefined)
+  const me = await $.process.run(['gh', 'api', 'user', '--jq', '.login'], GH).catch(() => undefined)
   if (!me || me.exitCode !== 0 || !me.stdout.trim()) {
     return 'Joining needs the GitHub CLI, signed in: install `gh` from https://cli.github.com and run `gh auth login`, then `/park join` again.'
   }
@@ -184,20 +186,20 @@ async function join($: EngineInterface, name: string): Promise<string> {
   let acct = await account($)
   const stats = parkStats(w, myParkId, displayName(w))
   if (!acct || acct.user !== user) {
-    const made = await gh(
-      $,
-      ['gist', 'create', '--public', '--filename', GIST_FILE, '--desc', 'My Claude Code Coaster Tycoon parks (github.com/thickiran/claude-coaster-tycoon)', '-'],
-      JSON.stringify({ v: 1, parks: { [myParkId]: stats } }, null, 2),
+    const first = JSON.stringify({ v: 1, parks: { [myParkId]: stats } }, null, 2)
+    const made = await $.process.run(
+      ['gh', 'gist', 'create', '--public', '--filename', 'park.json', '--desc', 'My Claude Code Coaster Tycoon parks (github.com/thickiran/claude-coaster-tycoon)', '-'],
+      { ...GH, stdin: first },
     )
     const url = made.stdout.trim().split('\n').pop() ?? ''
     const gist = url.split('/').pop() ?? ''
     if (made.exitCode !== 0 || !/^[0-9a-f]{20,40}$/.test(gist)) {
       return `Could not create your park gist: ${made.stderr.trim() || 'unknown error'}`
     }
-    const filed = await gh($, [
-      'issue', 'create', '--repo', REPO, '--title', `[park] join: ${user}`,
+    const filed = await $.process.run([
+      'gh', 'issue', 'create', '--repo', 'thickiran/claude-coaster-tycoon', '--title', `[park] join: ${user}`,
       '--body', `Registering my park gist for the global leaderboard.\n\n\`\`\`json\n${JSON.stringify({ gist })}\n\`\`\``,
-    ])
+    ], GH)
     if (filed.exitCode !== 0) return `Your park gist is up, but registering it failed: ${filed.stderr.trim()}`
     acct = { user, gist }
     await $.store.set('account', acct)

@@ -5,8 +5,6 @@
 import { parkRating } from './sim'
 import type { World } from './sim'
 
-export const REPO = 'thickiran/claude-coaster-tycoon'
-export const BOARD_URL = `https://raw.githubusercontent.com/${REPO}/main/leaderboard/leaderboard.json`
 export const GIST_FILE = 'park.json'
 
 export type ParkStats = {
