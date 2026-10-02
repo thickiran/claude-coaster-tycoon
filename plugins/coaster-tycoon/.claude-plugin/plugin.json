@@ -1,0 +1,11 @@
+{
+  "name": "coaster-tycoon",
+  "version": "0.2.0",
+  "description": "A RollerCoaster Tycoon-style park that Claude builds while it works: tool calls lay track, coasters get test runs, crowds pour in, and parks compete on a global leaderboard.",
+  "author": { "name": "thickiran", "url": "https://github.com/thickiran" },
+  "homepage": "https://github.com/thickiran/claude-coaster-tycoon",
+  "repository": "https://github.com/thickiran/claude-coaster-tycoon",
+  "license": "MIT",
+  "keywords": ["game", "rollercoaster", "tycoon", "fun", "leaderboard"],
+  "types": "./types/index.d.ts"
+}

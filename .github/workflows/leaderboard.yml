@@ -1,0 +1,43 @@
+name: Leaderboard
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  issues:
+    types: [opened]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: leaderboard
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.event_name != 'issues' || startsWith(github.event.issue.title, '[park] join')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build the leaderboard
+        run: node scripts/update-leaderboard.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add leaderboard
+          if git diff --cached --quiet; then
+            echo 'No changes'
+          else
+            git commit -m 'Update leaderboard'
+            git pull --rebase
+            git push
+          fi

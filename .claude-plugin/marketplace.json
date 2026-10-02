@@ -1,0 +1,17 @@
+{
+  "name": "claude-coaster-tycoon",
+  "owner": { "name": "thickiran", "url": "https://github.com/thickiran" },
+  "metadata": {
+    "description": "Claude Code Coaster Tycoon: Claude builds you a theme park while it works."
+  },
+  "plugins": [
+    {
+      "name": "coaster-tycoon",
+      "source": "./plugins/coaster-tycoon",
+      "description": "A RollerCoaster Tycoon-style park that Claude builds while it works, with a global leaderboard.",
+      "version": "0.2.0",
+      "category": "fun",
+      "keywords": ["game", "rollercoaster", "tycoon", "leaderboard"]
+    }
+  ]
+}
