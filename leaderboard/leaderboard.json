@@ -1,1 +1,21 @@
-{ "updatedAt": "2026-10-02T00:00:00.000Z", "players": 0, "entries": [] }
+{
+  "updatedAt": "2026-10-02T17:59:17.496Z",
+  "players": 1,
+  "entries": [
+    {
+      "rank": 1,
+      "user": "thickiran",
+      "id": "33991ae84490",
+      "name": "claude-coaster-tycoon Park",
+      "rating": 652,
+      "guests": 87,
+      "guestsTotal": 596,
+      "ridesOpen": 2,
+      "coasters": 2,
+      "riders": 891,
+      "best": "Stack Overflow (Hyper Coaster, E 6.14)",
+      "updatedAt": "2026-10-02T17:58:05.756Z",
+      "score": 1026
+    }
+  ]
+}
