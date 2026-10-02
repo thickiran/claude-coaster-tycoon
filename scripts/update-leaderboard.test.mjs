@@ -14,13 +14,13 @@ test('a normal park is kept and scored here, not by the player', () => {
 test('numbers are clamped', () => {
   const p = sanitizePark('a1b2c3d4e5f6', { ...park, rating: 1e9, ridesOpen: 99, guests: -5 }, 'u')
   assert.equal(p.rating, 999)
-  assert.equal(p.ridesOpen, 16)
+  assert.equal(p.ridesOpen, 48)
   assert.equal(p.guests, 0)
 })
 
 test('impossible parks are dropped', () => {
   assert.equal(sanitizePark('a1b2c3d4e5f6', { ...park, riders: 1e7, guestsTotal: 10 }, 'u'), null)
-  assert.equal(sanitizePark('a1b2c3d4e5f6', { ...park, coasters: 4, ridesOpen: 1 }, 'u'), null)
+  assert.equal(sanitizePark('a1b2c3d4e5f6', { ...park, coasters: 6, ridesOpen: 2 }, 'u'), null)
   assert.equal(sanitizePark('not-an-id', park, 'u'), null)
   assert.equal(sanitizePark('a1b2c3d4e5f6', { ...park, updatedAt: '2999-01-01T00:00:00Z' }, 'u'), null)
   assert.equal(sanitizePark('a1b2c3d4e5f6', 'nope', 'u'), null)

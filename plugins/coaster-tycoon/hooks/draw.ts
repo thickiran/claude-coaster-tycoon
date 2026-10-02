@@ -2,7 +2,7 @@
 // game's isometric style, then packs it for the terminal (half-block Raster
 // cells) or the desktop (an SVG of horizontal runs).
 
-import { BLVD, GX, GY, footprint, nodeAt, queueTile } from './sim'
+import { BLVD, GY, footprint, gridW, nodeAt, queueTile } from './sim'
 import type { Ride, World } from './sim'
 
 type View = { W: number; H: number; a: number; b: number; hs: number; ox: number; oy: number }
@@ -18,7 +18,7 @@ const EDGE_DARK = 0.86
 
 // Fits the whole park when it can; otherwise zooms to `minA` and follows the
 // camera, as the original's scrolling viewport did.
-function makeView(W: number, H: number, minA: number, camX: number, camY: number): View {
+function makeView(W: number, H: number, minA: number, camX: number, camY: number, GX: number): View {
   const span = GX + GY
   const cliff = 3
   const fit = Math.max(1.2, Math.min((W - 2) / span, (H - cliff - 2) / (span / 2 + 5.5)))
@@ -59,6 +59,7 @@ function hash(x: number, y: number): number {
 
 // Tile kinds: 0 grass, 1 path, 2 queue, 3 construction dirt.
 export function tileMap(w: World): Uint8Array {
+  const GX = gridW(w)
   const t = new Uint8Array(GX * GY)
   for (let x = 0; x < GX; x++) t[BLVD * GX + x] = 1
   for (const r of w.rides) {
@@ -80,6 +81,7 @@ function ground(w: World, v: View): Uint32Array {
   const key = `${v.W}x${v.H}:${v.a}:${v.ox}:${v.oy}:${w.groundVer}:${w.rides.map(r => r.status[0]).join('')}`
   if (key === groundKey) return groundBuf
   const tiles = tileMap(w)
+  const GX = gridW(w)
   const buf = new Uint32Array(v.W * v.H)
   const edge = v.a >= 5 ? 0.9 / v.a : 0
   const drop = Math.max(2, Math.round(v.a * 0.8))
@@ -167,7 +169,7 @@ class Canvas {
 type Sprite = { d: number; draw: () => void }
 
 export function renderFrame(w: World, W: number, H: number, minA = 0): Uint32Array {
-  const v = makeView(W, H, minA, w.camX, w.camY)
+  const v = makeView(W, H, minA, w.camX, w.camY, gridW(w))
   const cv = new Canvas(v, ground(w, v).slice())
   const big = v.a >= 5
   const sprites: Sprite[] = []

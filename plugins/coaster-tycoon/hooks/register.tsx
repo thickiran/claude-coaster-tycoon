@@ -394,7 +394,7 @@ export const register: Register = on => {
         <Text bold color="#f0d020">{money(w.money)}</Text>
         <Text>👥 {w.guests.length} in park ({w.guestsTotal} total)</Text>
         <Text>⭐ {parkRating(w)}</Text>
-        <Text>🎢 {open.length} open</Text>
+        <Text>🎢 {open.length} open · {w.cols * 2} plots</Text>
         <Button key="to-board" label={myRank && w.isShared ? `🏆 #${myRank}` : '🏆 Leaderboard'} onPress={() => showBoard($)} />
       </Box>
     )
@@ -418,7 +418,7 @@ export const register: Register = on => {
     const Svg = els.Svg as any
     const W = 220
     const H = 150
-    let svg = renderSvg(w)
+    let svg = renderSvg(w, 6)
     if (svg.length > 130_000) svg = toSvg(renderFrame(w, W, H), W, H, 4)
     if (svg.length > 130_000) svg = toSvg(renderFrame(w, 160, 110), 160, 110, 5.5)
     const best = [...w.rides].sort((a, b) => b.excitement - a.excitement)

@@ -6,7 +6,11 @@
 // big coasters, Sonnet's builds family rides, Haiku's builds small flat rides.
 // Each model has its own crew, so a Haiku subagent builds beside Opus.
 
-export const GX = 18
+// The park grows along its boulevard: each column is 4 tiles wide and holds
+// two plots, one either side. It opens with 4 columns and buys more land
+// whenever a crew runs out of room, up to COLS_MAX.
+export const COLS_START = 4
+export const COLS_MAX = 12
 export const GY = 13
 export const BLVD = 6
 
@@ -104,16 +108,23 @@ export type World = {
   isDirty: boolean
   camX: number
   camY: number
+  cols: number
   isShared: boolean
   shareName: string
 }
 
 type Slot = { x0: number; y0: number; w: number; h: number; isTop: boolean }
 
-export const SLOTS: Slot[] = [1, 5, 9, 13].flatMap(x0 => [
-  { x0, y0: 0, w: 4, h: 5, isTop: true },
-  { x0, y0: 8, w: 4, h: 5, isTop: false },
-])
+// Plot i: column i / 2, above the boulevard when even, below it when odd.
+export function slotAt(i: number): Slot {
+  const isTop = i % 2 === 0
+  return { x0: 1 + 4 * Math.floor(i / 2), y0: isTop ? 0 : 8, w: 4, h: 5, isTop }
+}
+
+// The map's width in tiles: a border column at each end of the plots.
+export function gridW(w: { cols: number }): number {
+  return 2 + 4 * w.cols
+}
 
 // Math.random may repeat itself in the plugin's environment, so the park
 // rolls its own dice, seeded from the host's entropy.
@@ -233,22 +244,44 @@ export function createWorld(): World {
     news: 'The gates are open! Give Claude some work and the crews start building.',
     newsAt: 0, thought: '', time: 0, frame: 0, groundVer: 1,
     spawnAcc: 0, thoughtAcc: 0, finishAcc: 0, isFinishing: false, isWorking: false,
-    toasts: [], milestone: 0, isDirty: true, camX: GX / 2, camY: GY / 2,
-    isShared: false, shareName: '',
+    toasts: [], milestone: 0, isDirty: true, camX: 9, camY: GY / 2,
+    cols: COLS_START, isShared: false, shareName: '',
   }
-  for (let i = 0; i < 90; i++) {
-    const x = rnd() * GX
+  plant(w, 0, gridW(w))
+
+  return w
+}
+
+// Trees and flowers on the land between columns x0 and x1.
+function plant(w: World, x0: number, x1: number) {
+  const area = (x1 - x0) * GY
+  for (let i = 0; i < area * 0.38; i++) {
+    const x = x0 + rnd() * (x1 - x0)
     const y = rnd() * GY
     if (Math.floor(y) === BLVD || (Math.floor(x) === 0 && Math.abs(y - BLVD - 0.5) < 1.5)) continue
+    if (w.rides.some(r => {
+      const f = footprint(r)
+      return x >= f.x0 - 0.2 && x < f.x0 + f.w + 0.2 && y >= f.y0 - 0.2 && y < f.y0 + f.h + 0.2
+    })) continue
     w.trees.push({ x, y })
   }
-  for (let x = 1; x < GX; x++) {
+  for (let x = Math.max(1, Math.floor(x0)); x < x1; x++) {
     for (const y of [BLVD - 0.12, BLVD + 1.12]) {
       if (rnd() < 0.5) w.flowers.push({ x: x + rnd(), y, c: pick([0xff4060, 0xffe040, 0xffffff, 0xc060ff]) })
     }
   }
+}
 
-  return w
+// Buys the next strip of land at the end of the boulevard: two new plots.
+function expand(w: World) {
+  const before = gridW(w)
+  w.cols += 1
+  w.trees = w.trees.filter(t => t.x < before - 1)
+  plant(w, before - 1, gridW(w))
+  w.groundVer += 1
+  w.isDirty = true
+  say(w, `🌳 The park bought more land! ${w.cols * 2} plots now.`)
+  w.toasts.push(`🌳 The park expanded: ${w.cols * 2} plots`)
 }
 
 const SAVE_VERSION = 2
@@ -261,6 +294,7 @@ export function saveWorld(w: World) {
     nextGuest: w.nextGuest,
     rideCounter: w.rideCounter,
     milestone: w.milestone,
+    cols: w.cols,
     isShared: w.isShared,
     shareName: w.shareName,
     trees: w.trees.map(t => [+t.x.toFixed(2), +t.y.toFixed(2)]),
@@ -282,6 +316,7 @@ export function loadWorld(saved: unknown): World {
   w.nextGuest = s.nextGuest
   w.rideCounter = s.rideCounter
   w.milestone = s.milestone ?? 0
+  w.cols = Math.min(COLS_MAX, Math.max(COLS_START, s.cols ?? COLS_START))
   w.isShared = s.isShared ?? false
   w.shareName = s.shareName ?? ''
   w.trees = s.trees.map(([x, y]) => ({ x: x!, y: y! }))
@@ -301,7 +336,7 @@ function newTrain(isTest: boolean): Train {
 }
 
 export function footprint(r: Ride): { x0: number; y0: number; w: number; h: number } {
-  const s = SLOTS[r.slot]!
+  const s = slotAt(r.slot)
 
   return r.half < 0 ? s : { x0: s.x0 + r.half * 2, y0: s.y0, w: 2, h: s.h }
 }
@@ -530,26 +565,27 @@ function demolish(w: World, gone: Ride[]) {
   w.rides = w.rides.filter(r => !ids.has(r.id))
 }
 
-// Finds room for a ride. Each crew keeps to its share of the park: coasters
-// take at most four plots, full-plot rides five, small rides three (two to a
-// plot), so every crew has somewhere to build, and a crew only ever demolishes
-// its own tier's rides.
-const MAX_FULL = 5
-const MAX_BIG = 4
-const MAX_HALF_SLOTS = 3
-
+// Finds room for a ride: half of a shared plot for a flat ride, else an
+// empty plot, else the park buys more land. Only a park at its full size
+// makes room by demolishing, and then only the crew's own weakest ride.
 function place(w: World, isHalf: boolean, tier: Tier): { slot: number; half: number } | undefined {
   const inSlot = (s: number) => w.rides.filter(r => r.slot === s)
   const score = (r: Ride) => (r.status === 'crashed' ? -1 : r.excitement)
   const worstOf = (list: Ride[]) => list.reduce((a, b) => (score(b) < score(a) ? b : a))
-  const empty = SLOTS.findIndex((_, s) => inSlot(s).length === 0)
   if (isHalf) {
-    for (let s = 0; s < SLOTS.length; s++) {
+    for (let s = 0; s < w.cols * 2; s++) {
       const rides = inSlot(s)
       if (rides.length === 1 && rides[0]!.half >= 0) return { slot: s, half: 1 - rides[0]!.half }
     }
-    const halfSlots = new Set(w.rides.filter(r => r.half >= 0).map(r => r.slot)).size
-    if (empty >= 0 && halfSlots < MAX_HALF_SLOTS) return { slot: empty, half: 0 }
+  }
+  let empty = -1
+  for (let s = 0; s < w.cols * 2 && empty < 0; s++) if (inSlot(s).length === 0) empty = s
+  if (empty < 0 && w.cols < COLS_MAX) {
+    expand(w)
+    empty = (w.cols - 1) * 2
+  }
+  if (empty >= 0) return { slot: empty, half: isHalf ? 0 : -1 }
+  if (isHalf) {
     const mine = w.rides.filter(r => r.half >= 0 && r.tier === tier && !isBusy(r))
     if (mine.length === 0) return undefined
     const worst = worstOf(mine)
@@ -557,10 +593,7 @@ function place(w: World, isHalf: boolean, tier: Tier): { slot: number; half: num
 
     return { slot: worst.slot, half: worst.half }
   }
-  const full = w.rides.filter(r => r.half < 0)
-  const hasRoom = full.length < MAX_FULL && (tier !== 'big' || full.filter(r => r.tier === 'big').length < MAX_BIG)
-  if (hasRoom && empty >= 0) return { slot: empty, half: -1 }
-  const mine = full.filter(r => r.tier === tier && !isBusy(r))
+  const mine = w.rides.filter(r => r.half < 0).filter(r => r.tier === tier && !isBusy(r))
   if (mine.length === 0) return undefined
   const worst = worstOf(mine)
   demolish(w, [worst])
@@ -591,7 +624,7 @@ function startRide(w: World, tier: Tier, who: string): Ride | undefined {
     spot = place(w, flat !== undefined, tier)
   }
   if (!spot) return undefined
-  const slot = SLOTS[spot.slot]!
+  const slot = slotAt(spot.slot)
   const used = new Set(w.rides.map(r => r.name))
   const fresh = NAMES[tier].filter(n => !used.has(n))
   w.rideCounter += 1
@@ -862,7 +895,7 @@ function choose(w: World, g: Guest) {
   }
   if (open.length === 0) {
     g.state = 'walk'
-    g.tx = 1 + rnd() * (GX - 2)
+    g.tx = 1 + rnd() * (gridW(w) - 2)
     g.rideId = -1
     g.rides += 0.5
     return
@@ -885,15 +918,15 @@ function choose(w: World, g: Guest) {
 function stepGuests(w: World, dt: number) {
   const open = w.rides.filter(r => r.status === 'open')
   const pull = open.reduce((a, r) => a + r.excitement / 5, 0)
-  const rate = open.length === 0 ? 0.04 : Math.min(3, 0.2 + pull * 0.4)
+  const rate = open.length === 0 ? 0.04 : Math.min(0.75 * w.cols, 0.2 + pull * 0.4)
   w.spawnAcc += rate * dt
   while (w.spawnAcc >= 1) {
     w.spawnAcc -= 1
-    if (w.guests.length >= 200) continue
+    if (w.guests.length >= Math.min(400, 50 * w.cols)) continue
     const g: Guest = {
       id: w.nextGuest++, x: 0.2, y: BLVD + 0.15 + rnd() * 0.7, tx: 0,
       state: 'walk', rideId: -1, rides: 0, maxRides: 2 + Math.floor(rnd() * 4),
-      shirt: pick(SHIRTS), speed: 0.9 + rnd() * 0.6,
+      shirt: pick(SHIRTS), speed: 1 + rnd() * 0.8,
     }
     choose(w, g)
     w.guests.push(g)
@@ -1031,11 +1064,11 @@ export function stepCamera(w: World, dt: number) {
     w.rides.find(r => r.status === 'crashed')
   const open = w.rides.filter(r => r.status === 'open')
   const ride = focus ?? open[Math.floor(w.time / 12) % Math.max(1, open.length)]
-  let tx = GX / 2
+  let tx = gridW(w) / 2
   let ty = BLVD + 0.5
   if (ride) {
     const f = footprint(ride)
-    const s = SLOTS[ride.slot]!
+    const s = slotAt(ride.slot)
     tx = f.x0 + f.w / 2
     ty = f.y0 + f.h / 2 + (s.isTop ? 0.8 : -0.8)
   }

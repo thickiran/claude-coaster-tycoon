@@ -1,8 +1,8 @@
 // The desktop's park: the same isometric scene as draw.ts, drawn as vector
 // shapes instead of pixels, so it stays sharp at whatever size the pane is.
 
-import { shade, tileMap } from './draw'
-import { BLVD, GX, GY, SLOTS, nodeAt, queueTile } from './sim'
+import { shade } from './draw'
+import { BLVD, GY, footprint, gridW, nodeAt, queueTile, slotAt } from './sim'
 import type { Ride, World } from './sim'
 
 const A = 20
@@ -12,8 +12,12 @@ const PAD = 12
 const CLIFF = 16
 const OX = GY * A + PAD
 const OY = 7 * HS + PAD
-export const VIEW_W = (GX + GY) * A + PAD * 2
-export const VIEW_H = OY + (GX + GY) * B + CLIFF + PAD
+
+// The drawing's size grows with the park.
+export function viewSize(w: World): { width: number; height: number } {
+  const gx = gridW(w)
+  return { width: (gx + GY) * A + PAD * 2, height: OY + (gx + GY) * B + CLIFF + PAD }
+}
 
 const P = (x: number, y: number, h: number): [number, number] => [
   OX + (x - y) * A,
@@ -31,7 +35,12 @@ const SKIN = '#f0c8a0'
 
 const peep = (step: number) =>
   `<g id="g${step}"><path d="M-.8 0l${step * 0.8} -3M.8 0l${-step * 0.8} -3" stroke="#30304a" stroke-width="1.1"/><rect x="-1.7" y="-6.5" width="3.4" height="4" rx=".8"/><circle cy="-8" r="1.6" fill="${SKIN}"/></g>`
+// A 2×2 tile checker in ground coordinates, with faint tile edges.
+const checker = (id: string, [even, odd]: number[]) =>
+  `<pattern id="${id}" width="2" height="2" patternUnits="userSpaceOnUse"><rect width="2" height="2" fill="${hex(odd!)}"/>` +
+  `<path d="M0 0h1v1H0zM1 1h1v1H1z" fill="${hex(even!)}"/><path d="M0 0h2M0 1h2M0 0v2M1 0v2" stroke="#000" stroke-opacity=".12" stroke-width=".04"/></pattern>`
 const DEFS =
+  checker('pg', GRASS) + checker('pp', PATH) + checker('pq', QUEUE) + checker('pd', DIRT) +
   '<g id="t"><ellipse rx="6" ry="3" fill="#000" opacity=".18"/><rect x="-1.2" y="-9" width="2.4" height="9" fill="#6a4424"/>' +
   '<circle cy="-14" r="7" fill="#1f5a24"/><circle cx="-2" cy="-16" r="4" fill="#2f7a30"/><circle cx="-3" cy="-17.5" r="1.6" fill="#4a9a40"/></g>' +
   peep(0) + peep(1)
@@ -42,13 +51,16 @@ function line(a: [number, number], b: [number, number], color: string, width: nu
   return `<path d="M${pt(a)}L${pt(b)}" stroke="${color}" stroke-width="${width}"${cap ? ` stroke-linecap="${cap}"` : ''}/>`
 }
 
-export function renderSvg(w: World): string {
+// `maxCols`: past this many columns the drawing shows a window that wide,
+// centred on the camera, instead of shrinking the whole park to fit.
+export function renderSvg(w: World, maxCols = Infinity): string {
   const out: string[] = []
   const shapes: Shape[] = []
   const add = (d: number, svg: string) => shapes.push({ d, svg })
   const blink = (w.frame & 2) !== 0
 
   // The ground and the cliff under its front edges.
+  const GX = gridW(w)
   const left = P(0, GY, 0)
   const bottom = P(GX, GY, 0)
   const right = P(GX, 0, 0)
@@ -57,15 +69,18 @@ export function renderSvg(w: World): string {
   out.push(`<polygon points="${pt(bottom)} ${pt(right)} ${pt(down(right))} ${pt(down(bottom))}" fill="#54391c"/>`)
   out.push(line([left[0], left[1] + CLIFF * 0.45], [bottom[0], bottom[1] + CLIFF * 0.45], '#5e4424', 1))
   out.push(line([bottom[0], bottom[1] + CLIFF * 0.45], [right[0], right[1] + CLIFF * 0.45], '#46301a', 1))
-  const tiles = tileMap(w)
-  for (let y = 0; y < GY; y++) {
-    for (let x = 0; x < GX; x++) {
-      const kind = tiles[y * GX + x]!
-      const odd = (x + y) & 1
-      const c = kind === 1 ? PATH[odd]! : kind === 2 ? QUEUE[odd]! : kind === 3 ? DIRT[odd]! : GRASS[odd]!
-      out.push(`<polygon points="${pt(P(x, y, 0))} ${pt(P(x + 1, y, 0))} ${pt(P(x + 1, y + 1, 0))} ${pt(P(x, y + 1, 0))}" fill="${hex(c)}" stroke="${hex(shade(c, 0.88))}" stroke-width=".6"/>`)
+  // The tiles, drawn in ground coordinates (one unit per tile) through the
+  // projection as a transform: a few patterned shapes, however big the park.
+  let ground = `<rect width="${GX}" height="${GY}" fill="url(#pg)"/><rect y="${BLVD}" width="${GX}" height="1" fill="url(#pp)"/>`
+  for (const r of w.rides) {
+    const q = queueTile(r)
+    ground += `<rect x="${q.x}" y="${q.y}" width="1" height="1" fill="url(#pq)"/>`
+    if (r.status === 'building') {
+      const f = footprint(r)
+      ground += `<rect x="${f.x0}" y="${f.y0}" width="${f.w}" height="${f.h}" fill="url(#pd)"/>`
     }
   }
+  out.push(`<g transform="matrix(${A} ${B} ${-A} ${B} ${OX} ${OY})">${ground}</g>`)
 
   for (const f of w.flowers) {
     const [x, y] = P(f.x, f.y, 0)
@@ -117,7 +132,10 @@ export function renderSvg(w: World): string {
   shapes.sort((a, b) => a.d - b.d)
   for (const s of shapes) out.push(s.svg)
 
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n1(VIEW_W)} ${n1(VIEW_H)}" width="${Math.round(VIEW_W * 2)}" height="${Math.round(VIEW_H * 2)}" stroke-linecap="round" stroke-linejoin="round"><defs>${DEFS}</defs><rect width="100%" height="100%" fill="#0e1210"/>${out.join('')}</svg>`
+  const { width: full, height } = viewSize(w)
+  const width = w.cols > maxCols ? viewSize({ ...w, cols: maxCols }).width : full
+  const x0 = Math.min(full - width, Math.max(0, P(w.camX, w.camY, 0)[0] - width / 2))
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${n1(x0)} 0 ${n1(width)} ${n1(height)}" width="${Math.round(width * 2)}" height="${Math.round(height * 2)}" stroke-linecap="round" stroke-linejoin="round"><defs>${DEFS}</defs><rect x="${n1(x0)}" width="${n1(width)}" height="${n1(height)}" fill="#0e1210"/>${out.join('')}</svg>`
 }
 
 function drawRide(w: World, r: Ride, add: (d: number, svg: string) => void, blink: boolean) {
@@ -132,47 +150,51 @@ function drawRide(w: World, r: Ride, add: (d: number, svg: string) => void, blin
   const under = hex(shade(r.color, 0.55))
   const support = hex(r.support)
   const brace = hex(shade(r.support, 0.75))
+  // The whole ride is one sprite, sorted by its plot: behind the boulevard
+  // when it lies beyond it, in front when it lies before it.
+  const f = footprint(r)
+  const depth = slotAt(r.slot).isTop ? f.x0 + f.w + f.y0 + f.h : f.x0 + f.y0
 
+  let posts = ''
+  let braces = ''
+  let plates = ''
   for (let i = 0; i < built; i++) {
     const node = r.nodes[i]!
     if (node.isLoop || node.h < 0.25) continue
     if (!r.isWood && i % 2 === 1) continue
     const top = pts[i]!
     const foot = P(node.x, node.y, 0)
-    let svg = line([top[0], top[1] + 2], foot, support, r.isWood ? 1.6 : 1.3)
+    posts += `M${n1(top[0])} ${n1(top[1] + 2)}V${n1(foot[1])}`
     if (r.isWood && node.h > 1.2) {
-      const mid = (top[1] + foot[1]) / 2
-      svg += line([foot[0] - 3, foot[1]], [foot[0], mid], brace, 1) + line([foot[0] + 3, foot[1]], [foot[0], mid], brace, 1)
+      const mid = n1((top[1] + foot[1]) / 2)
+      braces += `M${n1(foot[0] - 3)} ${n1(foot[1])}L${n1(foot[0])} ${mid}L${n1(foot[0] + 3)} ${n1(foot[1])}`
     }
-    if (!r.isWood) svg += `<rect x="${n1(foot[0] - 1.5)}" y="${n1(foot[1] - 1)}" width="3" height="2" fill="#808088"/>`
-    add(node.x + node.y - 0.03, svg)
+    if (!r.isWood) plates += `M${n1(foot[0] - 1.5)} ${n1(foot[1] - 1)}h3v2h-3z`
   }
+  let svg = (posts ? `<path d="${posts}" stroke="${support}" stroke-width="${r.isWood ? 1.6 : 1.3}"/>` : '') +
+    (braces ? `<path d="${braces}" fill="none" stroke="${brace}" stroke-width="1"/>` : '') +
+    (plates ? `<path d="${plates}" fill="#808088"/>` : '')
 
   for (let i = 0; i < r.stationLen && i < built; i++) {
-    const node = r.nodes[i]!
     const [x, y] = pts[i]!
-    add(node.x + node.y - 0.02,
-      `<rect x="${n1(x - 8)}" y="${n1(y + 1)}" width="16" height="4" fill="#d8d8d8" stroke="#a0a0a0" stroke-width=".6"/>` +
-      (i % 2 === 0 ? `<rect x="${n1(x - 8)}" y="${n1(y - 13)}" width="16" height="3" fill="${rail}"/>${line([x - 7, y + 1], [x - 7, y - 10], '#c0c0c0', 1)}` : ''))
+    svg += `<rect x="${n1(x - 8)}" y="${n1(y + 1)}" width="16" height="4" fill="#d8d8d8" stroke="#a0a0a0" stroke-width=".6"/>` +
+      (i % 2 === 0 ? `<rect x="${n1(x - 8)}" y="${n1(y - 13)}" width="16" height="3" fill="${rail}"/>${line([x - 7, y + 1], [x - 7, y - 10], '#c0c0c0', 1)}` : '')
   }
 
-  const segs = built >= n ? n : built - 1
-  for (let i = 0; i < segs; i++) {
-    const a = r.nodes[i]!
-    const b = r.nodes[(i + 1) % n]!
-    const pa = pts[i]!
-    const pb = pts[(i + 1) % n]!
-    add((a.x + b.x + a.y + b.y) / 2 + 0.05,
-      r.kind === 'Log Flume'
-        ? line([pa[0], pa[1] + 1], [pb[0], pb[1] + 1], '#6a4424', 7) + line(pa, pb, '#5ab4f4', 3.6)
-        : line([pa[0], pa[1] + 1.6], [pb[0], pb[1] + 1.6], under, 2.4) + line(pa, pb, rail, 2.6))
+  const ends = built >= n ? [...pts, pts[0]!] : pts.slice(0, built)
+  if (ends.length > 1) {
+    const d = (dy: number) => 'M' + ends.map(([x, y]) => `${n1(x)} ${n1(y + dy)}`).join('L')
+    svg += r.kind === 'Log Flume'
+      ? `<path d="${d(1)}" fill="none" stroke="#6a4424" stroke-width="7"/><path d="${d(0)}" fill="none" stroke="#5ab4f4" stroke-width="3.6"/>`
+      : `<path d="${d(1.6)}" fill="none" stroke="${under}" stroke-width="2.4"/><path d="${d(0)}" fill="none" stroke="${rail}" stroke-width="2.6"/>`
   }
+  add(depth, svg)
 
   if (r.status === 'building' && built > 0) {
     const end = r.nodes[built - 1]!
     const [x, y] = pts[built - 1]!
     const [gx, gy] = P(end.x + 0.3, end.y + 0.3, 0)
-    add(end.x + end.y + 0.3,
+    add(depth + 0.02,
       (blink ? `<circle cx="${n1(x)}" cy="${n1(y - 3)}" r="3" fill="#ffe040" stroke="#a08000" stroke-width=".8"/>` : '') +
       `<rect x="${n1(gx - 1.7)}" y="${n1(gy - 6.5)}" width="3.4" height="4" fill="#2858e0"/>` +
       `<circle cx="${n1(gx)}" cy="${n1(gy - 8)}" r="1.6" fill="${SKIN}"/>` +
@@ -189,7 +211,7 @@ function drawRide(w: World, r: Ride, add: (d: number, svg: string) => void, blin
       const sx = x + Math.sin(w.frame * 0.25 + k * 2) * 3
       svg += `<circle cx="${n1(sx)}" cy="${n1(y - rise)}" r="${n1(2 + rise / 8)}" fill="#808080" opacity="${n1(0.7 - rise / 50)}"/>`
     }
-    add(at.x + at.y + 0.4, svg)
+    add(depth + 0.02, svg)
   }
 
   const t = r.train
@@ -212,7 +234,7 @@ function drawRide(w: World, r: Ride, add: (d: number, svg: string) => void, blin
       const sx = cx + (seat === 0 ? -1.8 : 1.8)
       svg += `<rect x="${n1(sx - 1.4)}" y="${n1(cy - 8)}" width="2.8" height="3" fill="${hex(g?.shirt ?? 0xe02828)}"/><circle cx="${n1(sx)}" cy="${n1(cy - 9.5)}" r="1.5" fill="${SKIN}"/>`
     }
-    add(p.x + p.y + 0.08, svg)
+    add(depth + 0.01, svg)
   }
 }
 

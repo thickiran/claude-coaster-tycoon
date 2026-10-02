@@ -41,7 +41,7 @@ Every coaster is different: oval, figure-8, out-and-back, helix or free-form lay
 
 ![Sonnet and Haiku rides](docs/rides.png)
 
-**One park per project.** Each git repository (or folder) has its own park, saved between sessions.
+**One park per project, and it keeps growing.** Each git repository (or folder) has its own park, saved between sessions. When the crews run out of room, the park buys more land along its boulevard, from 8 plots up to 24. Nothing gets bulldozed until it is full size.
 
 ## Install
 
