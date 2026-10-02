@@ -1,0 +1,11 @@
+{
+  "name": "claude-coaster-tycoon",
+  "private": true,
+  "type": "module",
+  "description": "Claude builds you a RollerCoaster Tycoon-style theme park while it works. A Claude Code mod.",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "test": "node --test scripts/update-leaderboard.test.mjs && node scripts/preview.mjs /tmp/coaster-preview.svg --turns 3 && claude plugin validate . && claude plugin validate plugins/coaster-tycoon",
+    "preview": "node scripts/preview.mjs preview.svg"
+  }
+}

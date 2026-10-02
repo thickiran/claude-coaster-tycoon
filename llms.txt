@@ -1,0 +1,12 @@
+# Claude Coaster Tycoon
+
+> A Claude Code mod: while Claude Code works, every tool call builds part of a RollerCoaster Tycoon-style theme park. Rides get test runs, guests ride them, and parks compete on an opt-in global leaderboard run on GitHub.
+
+Install:
+  claude plugin marketplace add thickiran/claude-coaster-tycoon
+  claude plugin install coaster-tycoon@claude-coaster-tycoon
+Then start a new session; the park opens in a pane. /park reopens it, /park top shows the leaderboard, /park join enters it.
+
+- [README](https://github.com/thickiran/claude-coaster-tycoon/blob/main/README.md): what it does, commands, privacy
+- [AGENTS.md](https://github.com/thickiran/claude-coaster-tycoon/blob/main/AGENTS.md): repo map, architecture, rules, how to add rides
+- [Leaderboard data](https://raw.githubusercontent.com/thickiran/claude-coaster-tycoon/main/leaderboard/leaderboard.json)

@@ -4,6 +4,14 @@
 
 A Claude Code mod in the spirit of the original RollerCoaster Tycoon.
 
+**Quick start:** paste this into Claude Code and let it do the rest:
+
+```
+Install the Claude Coaster Tycoon mod from github.com/thickiran/claude-coaster-tycoon
+```
+
+Or install it yourself in two commands ([below](#install)).
+
 ![A park built by Opus, Sonnet and Haiku crews](docs/park.png)
 
 ## How it plays
@@ -75,6 +83,13 @@ Nothing. No servers: GitHub hosts the code, runs the Action and serves the leade
 
 ## Developing
 
+Agents (and humans): start with [AGENTS.md](AGENTS.md), which has the repo map, architecture, the rules that trip people up, and recipes for adding rides.
+
+```bash
+npm test          # leaderboard tests, an offline render, plugin + marketplace validation
+npm run preview   # render a simulated park to preview.svg and look at it
+```
+
 The mod is `plugins/coaster-tycoon/`:
 
 - `hooks/register.tsx`: hooks for tool calls, turns, the pane, `/park` and the leaderboard
@@ -83,9 +98,9 @@ The mod is `plugins/coaster-tycoon/`:
 - `hooks/draw.ts`: the terminal's pixel renderer
 - `hooks/board.ts`: leaderboard stats and score
 
-Load a local copy with `claude --plugin-dir plugins/coaster-tycoon`, and check it with `claude plugin validate plugins/coaster-tycoon`.
+Load a local copy with `claude --plugin-dir plugins/coaster-tycoon`.
 
-The leaderboard script has tests: `node --test scripts/update-leaderboard.test.mjs`.
+Ideas and pull requests welcome: new rides, layouts, scenery, sounds.
 
 ## License
 
