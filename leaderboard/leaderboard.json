@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-10-10T01:24:07.458Z",
+  "updatedAt": "2026-10-10T07:42:22.616Z",
   "players": 1,
   "entries": [
     {
@@ -9,13 +9,13 @@
       "name": "claude-coaster-tycoon Park",
       "rating": 999,
       "guests": 200,
-      "guestsTotal": 23067,
+      "guestsTotal": 43866,
       "ridesOpen": 7,
       "coasters": 5,
-      "riders": 65049,
+      "riders": 137778,
       "best": "The Monolith (Looping Coaster, E 7.49)",
-      "updatedAt": "2026-10-10T01:16:33.123Z",
-      "score": 5202
+      "updatedAt": "2026-10-10T04:56:33.119Z",
+      "score": 7696
     }
   ]
 }
